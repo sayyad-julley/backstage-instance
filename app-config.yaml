@@ -1,6 +1,9 @@
 app:
-  title: Scaffolded Backstage App
-  baseUrl: http://localhost:3000
+  title: Julley App
+  # Use environment variable for production deployment - set via APP_BASE_URL
+  # Falls back to localhost:3000 for local development
+  # SSL Certificate: Production uses https://julley.app
+  baseUrl: ${APP_BASE_URL:-http://localhost:3000}
 
 organization:
   name: My Company
@@ -12,7 +15,9 @@ backend:
   # auth:
   #   keys:
   #     - secret: ${BACKEND_SECRET}
-  baseUrl: http://localhost:7007
+  # Use environment variable for production deployment - set via BACKEND_BASE_URL
+  # Falls back to localhost:7007 for local development
+  baseUrl: ${BACKEND_BASE_URL:-http://localhost:7007}
   listen:
     port: 7007
     # Uncomment the following host directive to bind to specific interfaces
@@ -22,7 +27,10 @@ backend:
     # Content-Security-Policy directives follow the Helmet format: https://helmetjs.github.io/#reference
     # Default Helmet Content-Security-Policy values can be removed by setting the key to false
   cors:
-    origin: http://localhost:3000
+    # Use environment variable for production deployment - set via CORS_ORIGIN
+    # Falls back to localhost:3000 for local development
+    # SSL Certificate: Production uses https://julley.app
+    origin: ${CORS_ORIGIN:-http://localhost:3000}
     methods: [GET, HEAD, PATCH, POST, PUT, DELETE, OPTIONS]
     credentials: true
   # This is for local development only, it is not recommended to use this in production
@@ -65,8 +73,11 @@ techdocs:
 auth:
   # see https://backstage.io/docs/auth/ to learn about auth providers
   providers:
-    # See https://backstage.io/docs/auth/guest/provider
-    guest: {}
+    # See https://backstage.io/docs/auth/github/provider
+    github:
+      development:
+        clientId: ${GITHUB_CLIENT_ID}
+        clientSecret: ${GITHUB_CLIENT_SECRET}
 
 scaffolder:
 # see https://backstage.io/docs/features/software-templates/configuration for software template options

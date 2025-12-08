@@ -1,6 +1,9 @@
 app:
+  title: Julley App
   # Should be the same as backend.baseUrl when using the `app-backend` plugin.
-  baseUrl: http://localhost:7007
+  # Use environment variable for production deployment - set via APP_BASE_URL
+  # SSL Certificate: Configured for HTTPS with julley.app domain
+  baseUrl: ${APP_BASE_URL:-https://julley.app}
 
 backend:
   # Note that the baseUrl should be the URL that the browser and other clients
@@ -8,10 +11,41 @@ backend:
   # reachable not just from within the backend host, but from all of your
   # callers. When its value is "http://localhost:7007", it's strictly private
   # and can't be reached by others.
-  baseUrl: http://localhost:7007
+  # Use environment variable for production deployment - set via BACKEND_BASE_URL
+  # SSL Certificate: Configured for HTTPS with julley.app domain
+  baseUrl: ${BACKEND_BASE_URL:-https://julley.app}
   # The listener can also be expressed as a single <host>:<port> string. In this case we bind to
   # all interfaces, the most permissive setting. The right value depends on your specific deployment.
-  listen: ':7007'
+  listen:
+    port: 7007
+    host: 0.0.0.0
+  
+  # Content Security Policy - Enhanced for HTTPS with security best practices
+  # SSL Certificate: Enhanced CSP for secure HTTPS deployment
+  csp:
+    connect-src: ["'self'", 'http:', 'https:', 'ws:', 'wss:']
+    img-src: ["'self'", 'data:', 'https:']
+    upgrade-insecure-requests: true
+    block-all-mixed-content: true
+  
+  # CORS configuration - CRITICAL for non-localhost deployments
+  # Based on GitHub issue #9518: https://github.com/backstage/backstage/issues/9518
+  # The origin must match the browser's origin (protocol + host + port), NOT the full URL with path
+  # Browser sends origin as "https://julley.app" (no path), so CORS origin must match exactly
+  # SSL Certificate: Configured for HTTPS with julley.app domain
+  cors:
+    # CORS_ORIGIN should be just the origin (e.g., https://julley.app), extracted from APP_BASE_URL
+    # This is set automatically in docker-compose by extracting origin from APP_BASE_URL
+    origin: ${CORS_ORIGIN:-https://julley.app}
+    # Include OPTIONS method for CORS preflight requests
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE, OPTIONS]
+    # Allow credentials (cookies, authorization headers) for authenticated requests
+    credentials: true
+  
+  # Reading configuration - Allow reading from julley.app domain
+  reading:
+    allow:
+      - host: '*.julley.app'
 
   # config options: https://node-postgres.com/apis/client
   database:
@@ -21,16 +55,31 @@ backend:
       port: ${POSTGRES_PORT}
       user: ${POSTGRES_USER}
       password: ${POSTGRES_PASSWORD}
+      # CRITICAL FIX: Explicitly specify database name to prevent connection to wrong database
+      # Without this, PostgreSQL defaults to using username as database name (which would be "backstage")
+      # But the actual database is "backstage_plugin_catalog" (from POSTGRES_DB env var)
+      database: ${POSTGRES_DB:-backstage_plugin_catalog}
+      # SSL Certificate: Database SSL configuration for secure connections
       # https://node-postgres.com/features/ssl
       # you can set the sslmode configuration option via the `PGSSLMODE` environment variable
       # see https://www.postgresql.org/docs/current/libpq-ssl.html Table 33.1. SSL Mode Descriptions (e.g. require)
-      # ssl:
-      #   ca: # if you have a CA file and want to verify it you can uncomment this section
-      #     $file: <file-path>/ca/server.crt
+      ssl:
+        require: true
+        rejectUnauthorized: false
+        # If you have a CA file and want to verify it, uncomment the following:
+        # ca:
+        #   $file: <file-path>/ca/server.crt
+
+  # Working directory for persistent data storage (sessions, DevDataStore, etc.)
+  # This directory is mounted as a volume in docker-compose for data persistence
+  workingDirectory: /app/data
 
 auth:
   providers:
-    guest: {}
+    github:
+      development:
+        clientId: ${GITHUB_CLIENT_ID}
+        clientSecret: ${GITHUB_CLIENT_SECRET}
 
 catalog:
   # Overrides the default list locations from app-config.yaml as these contain example data.

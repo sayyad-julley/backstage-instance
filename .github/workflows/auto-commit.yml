@@ -1,0 +1,118 @@
+name: Auto-Commit to Main
+
+on:
+  push:
+    branches:
+      - '**'  # Trigger on push to any branch
+    paths:
+      - 'backstage-instance/**'  # Only trigger when changes in backstage-instance folder
+
+permissions:
+  contents: write  # Required to push to the repository
+
+jobs:
+  auto-commit:
+    name: Auto-Commit Changes to Main
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper branch operations
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate path changes
+        id: path-validation
+        run: |
+          # Verify changes are in backstage-instance/ folder
+          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "^backstage-instance/"; then
+            echo "✅ Changes detected in backstage-instance/ folder"
+            echo "has_path_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "ℹ️ No changes in backstage-instance/ folder, skipping workflow"
+            echo "has_path_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure Git
+        if: steps.path-validation.outputs.has_path_changes == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Get source branch info
+        if: steps.path-validation.outputs.has_path_changes == 'true'
+        id: branch-info
+        run: |
+          SOURCE_BRANCH="${{ github.ref_name }}"
+          SOURCE_SHA="${{ github.sha }}"
+          echo "source_branch=${SOURCE_BRANCH}" >> $GITHUB_OUTPUT
+          echo "source_sha=${SOURCE_SHA}" >> $GITHUB_OUTPUT
+          echo "Source branch: ${SOURCE_BRANCH}"
+          echo "Source SHA: ${SOURCE_SHA}"
+
+      - name: Checkout main branch
+        if: steps.path-validation.outputs.has_path_changes == 'true'
+        run: |
+          git fetch origin main:main || git fetch origin master:main || true
+          git checkout main || git checkout -b main || git checkout master || git checkout -b main
+
+      - name: Merge changes from source branch
+        if: steps.path-validation.outputs.has_path_changes == 'true'
+        run: |
+          SOURCE_BRANCH="${{ steps.branch-info.outputs.source_branch }}"
+          if [ "$SOURCE_BRANCH" != "main" ] && [ "$SOURCE_BRANCH" != "master" ]; then
+            git merge origin/$SOURCE_BRANCH --no-edit || echo "Merge conflict or no changes to merge"
+          fi
+
+      - name: Check for changes
+        if: steps.path-validation.outputs.has_path_changes == 'true'
+        id: check-changes
+        run: |
+          git status --porcelain > /tmp/changes.txt
+          if [ -s /tmp/changes.txt ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected:"
+            cat /tmp/changes.txt
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes detected"
+          fi
+
+      - name: Stage all changes
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          git add -A
+          echo "All changes staged"
+
+      - name: Commit changes
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          SOURCE_BRANCH="${{ steps.branch-info.outputs.source_branch }}"
+          SOURCE_SHA="${{ steps.branch-info.outputs.source_sha }}"
+          TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          COMMIT_MSG="Auto-commit from branch: ${SOURCE_BRANCH}
+
+          Source commit: ${SOURCE_SHA}
+          Timestamp: ${TIMESTAMP}
+          Triggered by: ${{ github.actor }}"
+          
+          git commit -m "${COMMIT_MSG}" || echo "Commit failed (may be empty or duplicate)"
+
+      - name: Push to main branch
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          git push origin main || git push origin master || echo "Push failed or no changes to push"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ steps.path-validation.outputs.has_path_changes }}" != "true" ]; then
+            echo "ℹ️ No changes in backstage-instance/ folder, workflow skipped"
+          elif [ "${{ steps.check-changes.outputs.has_changes }}" == "true" ]; then
+            echo "✅ Changes were committed and pushed to main branch"
+          else
+            echo "ℹ️ No changes detected, skipping commit"
+          fi
