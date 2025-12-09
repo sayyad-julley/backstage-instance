@@ -2,8 +2,8 @@ app:
   title: Julley App
   # Should be the same as backend.baseUrl when using the `app-backend` plugin.
   # Use environment variable for production deployment - set via APP_BASE_URL
-  # SSL Certificate: Configured for HTTPS with julley.app domain
-  baseUrl: ${APP_BASE_URL:-https://julley.app}
+  # SSL Certificate: Configured for HTTPS with backstage.julley.app subdomain
+  baseUrl: ${APP_BASE_URL:-https://backstage.julley.app}
 
 backend:
   # Note that the baseUrl should be the URL that the browser and other clients
@@ -12,40 +12,45 @@ backend:
   # callers. When its value is "http://localhost:7007", it's strictly private
   # and can't be reached by others.
   # Use environment variable for production deployment - set via BACKEND_BASE_URL
-  # SSL Certificate: Configured for HTTPS with julley.app domain
-  baseUrl: ${BACKEND_BASE_URL:-https://julley.app}
+  # SSL Certificate: Configured for HTTPS with backstage.julley.app subdomain
+  baseUrl: ${BACKEND_BASE_URL:-https://backstage.julley.app}
   # The listener can also be expressed as a single <host>:<port> string. In this case we bind to
   # all interfaces, the most permissive setting. The right value depends on your specific deployment.
   listen:
     port: 7007
     host: 0.0.0.0
   
-  # Content Security Policy - Enhanced for HTTPS with security best practices
-  # SSL Certificate: Enhanced CSP for secure HTTPS deployment
+  # Content Security Policy - Configured for ALB with SSL termination
+  # ALB handles SSL termination, so we don't force HTTPS redirects here
+  # SSL Certificate: CSP configured for ALB proxy setup
   csp:
     connect-src: ["'self'", 'http:', 'https:', 'ws:', 'wss:']
     img-src: ["'self'", 'data:', 'https:']
-    upgrade-insecure-requests: true
-    block-all-mixed-content: true
+    # Disabled upgrade-insecure-requests and block-all-mixed-content to prevent redirect loops
+    # when behind ALB that terminates SSL (ALB forwards HTTP internally)
+    # upgrade-insecure-requests: false  # Disabled - causes redirect loop behind ALB
+    # block-all-mixed-content: false    # Disabled - causes redirect loop behind ALB
   
   # CORS configuration - CRITICAL for non-localhost deployments
   # Based on GitHub issue #9518: https://github.com/backstage/backstage/issues/9518
   # The origin must match the browser's origin (protocol + host + port), NOT the full URL with path
-  # Browser sends origin as "https://julley.app" (no path), so CORS origin must match exactly
-  # SSL Certificate: Configured for HTTPS with julley.app domain
+  # Browser sends origin as "https://backstage.julley.app" (no path), so CORS origin must match exactly
+  # SSL Certificate: Configured for HTTPS with backstage.julley.app subdomain
   cors:
-    # CORS_ORIGIN should be just the origin (e.g., https://julley.app), extracted from APP_BASE_URL
+    # CORS_ORIGIN should be just the origin (e.g., https://backstage.julley.app), extracted from APP_BASE_URL
     # This is set automatically in docker-compose by extracting origin from APP_BASE_URL
-    origin: ${CORS_ORIGIN:-https://julley.app}
+    origin: ${CORS_ORIGIN:-https://backstage.julley.app}
     # Include OPTIONS method for CORS preflight requests
     methods: [GET, HEAD, PATCH, POST, PUT, DELETE, OPTIONS]
     # Allow credentials (cookies, authorization headers) for authenticated requests
     credentials: true
   
-  # Reading configuration - Allow reading from julley.app domain
+  # Reading configuration - Allow reading from julley.app domain and subdomains
   reading:
     allow:
       - host: '*.julley.app'
+      - host: 'backstage.julley.app'
+      - host: 'mintlify.julley.app'
 
   # config options: https://node-postgres.com/apis/client
   database:
